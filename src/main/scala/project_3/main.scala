@@ -17,14 +17,165 @@ object main{
   Logger.getLogger("org.spark-project").setLevel(Level.WARN)
 
   def LubyMIS(g_in: Graph[Int, Int]): Graph[Int, Int] = {
-    while (remaining_vertices >= 1) {
-        // To Implement
-    }
+
+	//Initialize remaining_vertices
+	var remaining_vertices = g_in.numVertices
+
+	while (remaining_vertices >= 1) {
+        	// To Implement
+		val d = g_in.aggregateMessages[(Int, Int)](
+		t => {
+		if (t.srcAttr != -1 && t.srcAttr != 1) {
+			if (t.dstAttr != -1 && t.dstAttr != 1)
+          		{
+			t.sendToDst((1, 0))
+            		t.sendToSrc((1, 0))
+           		}
+          		else {
+            		t.sendToSrc((0, 0))
+            		t.sendToDst((-1, t.dstAttr))
+          		}
+        	}
+        	else if (t.dstAttr != -1 && t.dstAttr != 1){
+          		t.sendToDst((0, 0))
+          		t.sendToSrc((-1, t.srcAttr))
+        	}
+        	else {
+          		t.sendToSrc((-1, t.srcAttr))
+          		t.sendToDst((-1, t.dstAttr))
+        	}
+		}, ((a,b) => {
+      			if (a._1 >= 0)	(a._1 + b._1, 0)
+     			else	a
+    		})
+		)
+    	}
+
+	val random = new scala.util.Random()
+	
+	val random_d = d.map(x => {
+		if (x._2._1 == 0)	(x._1, (x._2._1, 1, x._2._2))
+    		if (x._2._1 < 0) 	(x._1, (x._2._1, 0, x._2._2))
+
+      		val n = random.nextFloat
+      		if (n < 1.0/(2*x._2._1))	(x._1, (x._2._1, 1, x._2._2))
+      		else	(x._1, (x._2._1, 0, x._2._2))
+	})
+
+	val g_in_new = Graph(random_d, g_in.edges)
+
+	val new_d = g_in_new.aggregateMessages[Int]( t => {
+        	if (t.srcAttr._3 != 0 && t.dstAttr._3 != 0) {
+          		if (t.srcAttr._3 == 1)	t.sendToSrc(0)
+			else	t.sendToSrc(-1)
+
+			if (t.dstAttr._3 == 1)	t.sendToDst(0)
+			else t.sendToDst(-1)
+        	}
+        	else if (t.srcAttr._3 != 0){
+          		if (t.srcAttr._3 == 1)	t.sendToSrc(0)
+			else	t.sendToSrc(-1)
+          		if (t.dstAttr._2 == 1)	 t.sendToDst(0)
+          		else	t.sendToDst(1)
+        	}
+        	else if (t.dstAttr._3 != 0){
+          		if (t.dstAttr._3 == 1)	 t.sendToDst(0)
+			else	t.sendToDst(-1)
+
+          		if (t.srcAttr._2 == 1)	t.sendToSrc(0)
+          		else	t.sendToSrc(1)
+        	}
+       		else{
+          		if (t.srcAttr._2 == 1 && t.dstAttr._2 == 1) {
+            			if (t.srcAttr._1 >= t.dstAttr._1){
+              				triplet.sendToSrc(0)
+              				triplet.sendToDst(1)
+            			}
+            			else{
+              				triplet.sendToSrc(1)
+              				triplet.sendToDst(0)
+            			}
+          		}
+          		else if (t.srcAttr._2 == 1){
+            			triplet.sendToSrc(0)
+            			triplet.sendToDst(1)
+          		}
+          		else if (t.dstAttr._2 == 1){
+            			t.sendToSrc(1)
+            			t.sendToDst(0)
+         		}
+          		else{
+            			t.sendToSrc(1)
+            			t.sendToDst(1)
+          		}
+		}
+	}, ((a, b) => {
+        	if (a < 0)	-1
+		else	a+b
+	}) ).map(x => {
+        	if (x._2 == 0)	(x._1, 1)
+        	else if (x._2 == -1)	x
+		else	(x._1, 0)
+        })
+
+
+	val g_in_newer = Graph(new_d, g_in.edges)
+
+	val no_neighbors = g_in_newer.aggregateMessages[Int](	(t => {
+        	if (t.srcAttr == 1){
+          		t.sendToDst(-1)
+          		t.sendToSrc(1)            
+        	}
+        	else if (t.dstAttr == 1){
+          		t.sendToSrc(-1)
+          		t.sendToDst(1)
+        	}
+        	else{
+          		t.sendToSrc(0)
+          		t.sendToDst(0)
+        	}
+      	}), ((a, b) => {
+        	if (a != 0) 	a
+		else	b
+	}) )
+
+    	val g_in_complete = Graph(no_neighbors, g_in.edges)
+    
+	g_in = g_in_complete
+
+    	remaining_vertices = g_in.vertices.map(x => {
+    		if (x._2 == 0)	1
+		else	0
+	}).collect.sum
+     }
+
+    return g_in
+
   }
 
 
   def verifyMIS(g_in: Graph[Int, Int]): Boolean = {
-    // To Implement
+	// To Implement
+  
+	val reverse = Graph(g_in.vertices,g_in.edges.reverse)
+
+    	val bidirect = Graph(g_in.vertices.union(reverse.vertices),g_in.edges.union(reverse.edges))
+
+    	val message = bidirect.aggregateMessages[(Int,Int)](t=>{
+        if(t.srcAttr == 1 && t.dstAttr == 1)	t.sendToDst((1,1))
+   
+	else if(t.srcAttr == 1 && t.dstAttr == -1)	t.sendToDst((1,-1))
+   
+	else if(t.srcAttr == -1 && t.dstAttr == 1)	t.sendToDst((-1,1))
+   
+	else val.sendToDst((-1,-1))},
+
+     		(x1,x2) => (math.max(x1._1,x2._1),math.max(x1._2,x2._2))
+   	)
+
+	answer = message.map(x => x._2._1+x._2._2).filter(v=>math.abs(v)>0).count()==0
+
+	return answer
   }
 
 
@@ -45,7 +196,7 @@ object main{
         sys.exit(1)
       }
       val startTimeMillis = System.currentTimeMillis()
-      val edges = sc.textFile(args(1)).map(line => {val x = line.split(","); Edge(x(0).toLong, x(1).toLong , 1)} )
+      val edges = sc.textFile(args(1)).map(line => {val x = line.split(","); Edge(x(0).toLong, x(1).toLong , 1)} ).filter({case Edge(a,b,c) => a!=b})
       val g = Graph.fromEdges[Int, Int](edges, 0, edgeStorageLevel = StorageLevel.MEMORY_AND_DISK, vertexStorageLevel = StorageLevel.MEMORY_AND_DISK)
       val g2 = LubyMIS(g)
 
